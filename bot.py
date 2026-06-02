@@ -7,15 +7,17 @@ import urllib.parse
 import json
 import time
 import socket
+import html
 from datetime import datetime, timezone, timedelta
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "").strip()
 
-# منابع جدید و بهینه‌شده برای اینترنت ایران
+# منابع جدید، فعال و قدرتمند (جایگزین منابع مسدود شده)
 SOURCES = [
-    "https://raw.githubusercontent.com/soroushmirzaei/telegram-configs-collector/main/protocols/vless",
-    "https://raw.githubusercontent.com/soroushmirzaei/telegram-configs-collector/main/protocols/vmess",
+    "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
+    "https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/main/vless_configs.txt",
+    "https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/main/vmess_configs.txt",
     "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix"
 ]
 
@@ -48,7 +50,7 @@ def tcp_ping(ip, port):
         ping_ms = int((end - start) * 1000)
         return f"🟢 متصل ({ping_ms}ms)"
     except:
-        return "🔴 تایم‌اوت"
+        return "🔴 تایم‌اوت (احتمالاً مسدود برای سرورهای خارجی)"
 
 def get_real_location(ip, original_name):
     clean_name = re.sub(r'[^\w\s\-\.]', '', original_name).strip()
@@ -144,7 +146,6 @@ def main():
         except Exception as e:
             pass
 
-    # ترفند جدید: خواندن لیست از آخر به اول (برای گرفتن داغ‌ترین و جدیدترین کانفیگ‌ها)
     seen = set()
     unique_configs = []
     for conf in reversed(all_configs):
@@ -153,8 +154,8 @@ def main():
             seen.add(conf)
             
     if not unique_configs:
-        print("منبع خالی است.")
-        sys.exit(0)
+        print("ارور: تمام منابع خالی یا از دسترس خارج شده‌اند!")
+        sys.exit(1)
 
     final_configs = []
     untested_configs = []
@@ -184,6 +185,7 @@ def main():
         final_configs.extend(untested_configs[:needed])
 
     if not final_configs:
+        print("هیچ کانفیگی برای ارسال پیدا نشد.")
         sys.exit(1)
 
     api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -192,17 +194,21 @@ def main():
     for item in final_configs:
         real_location = get_real_location(item['ip'], item['name'])
         
+        # سپر حفاظتی گرافیک: حل مشکل ارسال نشدن به خاطر کاراکترهای & و < در تلگرام
+        safe_conf = html.escape(item['conf'])
+        safe_loc = html.escape(real_location)
+        
         message = f"""
 🚀 <b>کانفیگ جدید و پرسرعت</b>
 
-📍 <b>لوکیشن:</b> {real_location}
+📍 <b>لوکیشن:</b> {safe_loc}
 ⚙️ <b>پروتکل:</b> {item['protocol']}
 📡 <b>وضعیت سرور:</b> {item['ping']} (تست از {tester_loc})
 ⏰ <b>زمان استخراج:</b> {iran_time_str}
 
 👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
 
-<code>{item['conf']}</code>
+<code>{safe_conf}</code>
 
 🆔 {CHANNEL_ID}
 """
@@ -213,7 +219,13 @@ def main():
             "disable_web_page_preview": True
         }
         
-        requests.post(api_url, json=payload)
+        tg_res = requests.post(api_url, json=payload)
+        
+        # اگر تلگرام به هر دلیلی باز هم پیام رو رد کرد، با ارور قرمز متوقف بشه
+        if tg_res.status_code != 200:
+            print(f"تلگرام پیام را رد کرد! دلیل:\n{tg_res.text}")
+            sys.exit(1)
+            
         time.sleep(3)
         
     print("✅ ارسال موفقیت‌آمیز بود!")
