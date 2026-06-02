@@ -30,10 +30,10 @@ def parse_config_info(config_str):
     return protocol, name
 
 def run_bot():
-    # استخراج چند کانفیگ تکی داغ
+    # لینک‌های اصلی برای استخراج کانفیگ‌های تکی
     SOURCES = [
-        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
-        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt"
+        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix",
+        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt"
     ]
     
     all_configs = []
@@ -49,20 +49,20 @@ def run_bot():
 
     iran_time = get_iran_time()
 
-    # ۱. ارسال لینک‌های اشتراک جادویی (ترفند هیدیفای)
+    # ۱. ارسال لینک‌های اشتراک دائمی با پروکسی ضد فیلتر (بدون نیاز به VPN آپدیت میشن)
     sub_message = f"""
-🌟 <b>لینک‌های اشتراک (سابسکریپشن) - آپدیت خودکار</b> 🌟
+🌟 <b>لینک‌های اشتراک (سابسکریپشن) - آپدیت بدون نیاز به فیلترشکن</b> 🌟
 
 با کپی کردن لینک‌های زیر در هیدیفای (Hiddify) یا v2rayNG و زدن دکمه آپدیت، برنامه شما صدها کانفیگ را بررسی کرده و <b>سالم‌ترین‌های مخصوص نت شما</b> را جدا می‌کند!
 
-👇 <b>لینک اشتراک VLESS (پیشنهادی):</b>
-<code>https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt</code>
+👇 <b>لینک اشتراک اول (پیشنهادی و ترکیبی):</b>
+<code>https://mirror.ghproxy.com/https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt</code>
 
-👇 <b>لینک اشتراک Reality (مخصوص همراه اول و مخابرات):</b>
-<code>https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality</code>
+👇 <b>لینک اشتراک دوم (مخصوص همراه اول و مخابرات):</b>
+<code>https://mirror.ghproxy.com/https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix</code>
 
-👇 <b>لینک اشتراک ترکیبی (مخصوص ایرانسل):</b>
-<code>https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity</code>
+👇 <b>لینک اشتراک سوم (مخصوص ایرانسل):</b>
+<code>https://mirror.ghproxy.com/https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt</code>
 
 ⏰ <b>زمان آپدیت:</b> {iran_time}
 🆔 {CHANNEL_ID}
