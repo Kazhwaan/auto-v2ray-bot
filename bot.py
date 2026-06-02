@@ -23,22 +23,27 @@ def main():
         # دانلود کانفیگ‌ها از اینترنت
         response = requests.get(SOURCE_URL)
         if response.status_code == 200:
-            # دیکود کردن و مرتب‌سازی
             raw_data = response.text
             decoded_data = base64.b64decode(raw_data).decode('utf-8')
-            configs = decoded_data.splitlines()
             
-            # انتخاب ۳ کانفیگ اول برای جلوگیری از شلوغ شدن کانال
-            top_configs = configs[:3] 
+            # جدا کردن کانفیگ‌ها و حذف خطوط خالی
+            configs = [line for line in decoded_data.splitlines() if line.strip()]
             
-            message = "🚀 **کانفیگ‌های جدید V2Ray:**\n\n"
-            for conf in top_configs:
-                message += f"`{conf}`\n\n"
-            
-            message += "💡 برای کپی روی کانفیگ کلیک کنید."
-            
-            send_to_telegram(message)
-            print("کانفیگ‌ها با موفقیت به کانال ارسال شدند!")
+            # شرط هوشمندانه: اگر کانفیگی پیدا شد، پیام رو بفرست
+            if len(configs) > 0:
+                top_configs = configs[:3] # انتخاب ۳ تا از جدیدترین‌ها
+                
+                message = "🚀 **کانفیگ‌های جدید V2Ray:**\n\n"
+                for conf in top_configs:
+                    message += f"`{conf}`\n\n"
+                
+                message += "💡 برای کپی روی کانفیگ کلیک کنید."
+                
+                send_to_telegram(message)
+                print("کانفیگ‌ها با موفقیت به کانال ارسال شدند!")
+            else:
+                # اگر کانفیگی پیدا نشد، ربات هیچی نمیفرسته
+                print("منبع کانفیگ‌ها خالی بود، پیامی ارسال نشد.")
         else:
             print("خطا در دریافت اطلاعات از منبع.")
     except Exception as e:
