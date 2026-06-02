@@ -20,79 +20,78 @@ def get_iran_time():
     iran_tz = timezone(timedelta(hours=3, minutes=30))
     return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S")
 
-def parse_config_info(config_str):
-    protocol, name = "نامشخص", "کانفیگ 🌍"
+def safe_base64_decode(text):
     try:
-        if config_str.startswith("vless://"): protocol = "VLESS 🛡️"
-        elif config_str.startswith("trojan://"): protocol = "Trojan 🐎"
-        if "#" in config_str: name = urllib.parse.unquote(config_str.split("#")[1])
-    except: pass
-    return protocol, name
+        text = re.sub(r'\s+', '', text.strip())
+        text += '=' * (len(text) % 4)
+        return base64.b64decode(text).decode('utf-8', errors='ignore')
+    except:
+        return ""
 
 def run_bot():
+    # بهترین منابع استخراج کانفیگ‌های قدرتمند
     SOURCES = [
-        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix",
-        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt"
+        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
+        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
+        "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
+        "https://raw.githubusercontent.com/w177140/v2rayN-configs/main/vless.txt"
     ]
     
     all_configs = []
     for url in SOURCES:
         try:
-            res = requests.get(url, timeout=5)
+            res = requests.get(url, timeout=10)
             if res.status_code == 200:
+                # استخراج مستقیم
                 all_configs.extend(re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+)', res.text))
+                # استخراج از متن‌های کدگذاری شده
+                decoded = safe_base64_decode(res.text)
+                if decoded:
+                    all_configs.extend(re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+)', decoded))
         except: continue
 
-    unique = list(dict.fromkeys(reversed(all_configs)))
-    final_configs = unique[:3] 
+    if not all_configs:
+        return send_msg("⚠️ <b>ربات:</b> متاسفانه تمام منابع گیت‌هاب مسدود هستند.")
 
+    unique = list(dict.fromkeys(reversed(all_configs)))
+    
+    # اولویت‌بندی شدید برای نت ایران
+    def get_score(conf):
+        c = conf.lower()
+        return (20 if "reality" in c else 0) + (15 if any(x in c for x in ["mci","mtn","irancell","mahsa"]) else 0) + (10 if "vless" in c else 0)
+
+    unique.sort(key=get_score, reverse=True)
+
+    # جدا کردن 15 کانفیگ برتر
+    final_configs = unique[:15]
+    
+    # چسباندن تمام کانفیگ‌ها به هم با یک خط فاصله
+    bulk_configs_text = "\n\n".join(final_configs)
+    safe_bulk_configs = html.escape(bulk_configs_text)
+    
     iran_time = get_iran_time()
 
-    # پیام اشتراک با پروکسی جدید (ghp.ci) و بک‌آپ مستقیم
-    sub_message = f"""
-🌟 <b>لینک‌های اشتراک (سابسکریپشن) - آپدیت خودکار</b> 🌟
+    # ارسال یک پیام واحد و خفن به کانال
+    msg = f"""
+🚀 <b>بسته {len(final_configs)} تایی کانفیگ‌های داغ و ضد فیلتر</b>
 
-لینک‌های زیر را در هیدیفای (Hiddify) یا v2rayNG کپی کرده و آپدیت کنید تا صدها کانفیگ دریافت کنید.
+✅ <b>بدون نیاز به لینک و بدون ارور آپدیت!</b>
+این روش غیرقابل فیلتر است. تمام کانفیگ‌ها از سرورهای آزاد استخراج شده‌اند.
 
-🟢 <b>لینک‌های ضد فیلتر (آپدیت بدون نیاز به VPN):</b>
-<code>https://ghp.ci/https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt</code>
+👇 <b>آموزش استفاده:</b>
+۱. فقط کافیست روی کادر زیر <b>یک بار ضربه بزنید</b> تا کل ۱۵ کانفیگ کپی شوند.
+۲. وارد برنامه هیدیفای (Hiddify) یا v2rayNG شوید.
+۳. دکمه <b>+ (افزودن)</b> را زده و <b>Import from Clipboard (از کلیپ‌بورد)</b> را انتخاب کنید.
 
-<code>https://ghp.ci/https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix</code>
+<code>{safe_bulk_configs}</code>
 
----
-🔴 <b>لینک‌های مستقیم (اگر لینک‌های بالا کار نکردند، برای آپدیت این لینک‌ها باید ابتدا یک فیلترشکن موقت روشن کنید):</b>
-<code>https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt</code>
-
-<code>https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix</code>
-
-⏰ <b>زمان آپدیت:</b> {iran_time}
+⏰ <b>زمان استخراج:</b> {iran_time}
 🆔 {CHANNEL_ID}
 """
-    send_msg(sub_message.strip())
-    time.sleep(3)
-
-    # ارسال کانفیگ‌های تکی
-    for conf in final_configs:
-        protocol, name = parse_config_info(conf)
-        safe_conf = html.escape(conf)
-        safe_name = html.escape(name)
-        
-        msg = f"""
-🚀 <b>کانفیگ تکی جدید</b>
-
-📍 <b>نام:</b> {safe_name}
-⚙️ <b>پروتکل:</b> {protocol}
-
-💡 <i>در صورت عدم اتصال، حتماً گزینه <b>Fragment (فرگمنت)</b> را روشن کنید.</i>
-
-👇 <b>برای اتصال ضربه بزنید:</b>
-
-<code>{safe_conf}</code>
-
-🆔 {CHANNEL_ID}
-"""
-        send_msg(msg.strip())
-        time.sleep(2)
+    res = send_msg(msg.strip())
+    
+    if res.status_code != 200:
+        send_msg(f"❌ <b>تلگرام پیام را رد کرد! ارور:</b>\n<pre>{html.escape(res.text)}</pre>")
 
 if __name__ == "__main__":
     if not BOT_TOKEN or not CHANNEL_ID:
@@ -100,5 +99,5 @@ if __name__ == "__main__":
     try:
         run_bot()
     except Exception as e:
-        send_msg(f"❌ <b>ارور:</b>\n<pre>{html.escape(str(e))}</pre>")
+        send_msg(f"❌ <b>ارور سرور گیت‌هاب:</b>\n<pre>{html.escape(str(e))}</pre>")
         sys.exit(1)
