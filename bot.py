@@ -6,6 +6,8 @@ import re
 import urllib.parse
 import json
 import time
+import socket
+from datetime import datetime, timezone, timedelta
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "").strip()
@@ -15,6 +17,27 @@ SOURCES = [
     "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
     "https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt"
 ]
+
+def get_iran_time():
+    """محاسبه دقیق ساعت و تاریخ ایران"""
+    iran_tz = timezone(timedelta(hours=3, minutes=30))
+    return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S")
+
+def tcp_ping(ip, port):
+    """تست زنده بودن سرور و گرفتن پینگ واقعی"""
+    if not ip or not port:
+        return "🟡 نامشخص"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2.0) # فقط ۲ ثانیه منتظر جواب میمونه
+        start = time.time()
+        s.connect((ip, int(port)))
+        end = time.time()
+        s.close()
+        ping_ms = int((end - start) * 1000)
+        return f"🟢 متصل ({ping_ms}ms)"
+    except:
+        return "🔴 تایم‌اوت (سرور خاموش)"
 
 def decode_base64(text):
     text = text.strip()
@@ -27,96 +50,19 @@ def decode_base64(text):
         return ""
 
 def parse_config_info(config_str):
+    """استخراج پروتکل، اسم، آی‌پی و پورت برای تست"""
     protocol = "نامشخص"
     name = "مخفی 🌍"
+    ip = ""
+    port = ""
     
-    if config_str.startswith("vless://"):
-        protocol = "VLESS 🛡️"
-        if "#" in config_str:
-            name = urllib.parse.unquote(config_str.split("#")[1])
-            
-    elif config_str.startswith("trojan://"):
-        protocol = "Trojan 🐎"
-        if "#" in config_str:
-            name = urllib.parse.unquote(config_str.split("#")[1])
-            
-    elif config_str.startswith("vmess://"):
-        protocol = "VMess 🪪"
-        try:
-            b64_str = config_str[8:]
-            missing_padding = len(b64_str) % 4
-            if missing_padding != 0:
-                b64_str += '=' * (4 - missing_padding)
-            json_str = base64.b64decode(b64_str).decode('utf-8')
-            data = json.loads(json_str)
-            name = data.get("ps", name)
-        except:
-            pass
-            
-    return protocol, name
-
-def main():
-    if not BOT_TOKEN or not CHANNEL_ID:
-        print("ارور: توکن یا آیدی کانال خالی است!")
-        sys.exit(1)
-
-    all_configs = []
-
-    for url in SOURCES:
-        try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                text = response.text
-                if "vmess://" in text or "vless://" in text or "trojan://" in text:
-                    decoded_data = text
-                else:
-                    decoded_data = decode_base64(text)
+    try:
+        if config_str.startswith("vless://"):
+            protocol = "VLESS 🛡️"
+            if "#" in config_str:
+                name = urllib.parse.unquote(config_str.split("#")[1])
+            match = re.search(r'://[^@]+@([^:]+):(\d+)', config_str)
+            if match:
+                ip, port = match.groups()
                 
-                configs = re.findall(r'(vless://\S+|vmess://\S+|trojan://\S+)', decoded_data)
-                all_configs.extend(configs)
-        except Exception as e:
-            print(f"خطا در دریافت از {url}")
-
-    unique_configs = list(set(all_configs))
-    
-    if not unique_configs:
-        print("متاسفانه در هیچکدام از منابع کانفیگی پیدا نشد!")
-        sys.exit(0)
-
-    top_configs = unique_configs[:3]
-
-    api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    
-    for conf in top_configs:
-        protocol, name = parse_config_info(conf)
-        
-        # 🌟 قالب جدید: حرفه‌ای، زیبا و کاملاً صادقانه
-        message = f"""
-🚀 <b>کانفیگ جدید و پرسرعت</b>
-
-📍 <b>لوکیشن:</b> {name}
-⚙️ <b>پروتکل:</b> {protocol}
-📡 <b>وضعیت سرور:</b> 🟢 فعال (تست شده در سرور مبدا)
-🌐 <b>شبکه:</b> سازگار با اکثر نت‌های ایران (تست کنید)
-⏰ <b>زمان استخراج:</b> همین الان توسط ربات
-
-👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
-
-<code>{conf}</code>
-
-🆔 {CHANNEL_ID}
-"""
-        payload = {
-            "chat_id": CHANNEL_ID,
-            "text": message,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True
-        }
-        
-        requests.post(api_url, json=payload)
-        time.sleep(3)
-        
-    print("✅ پیام‌های حرفه‌ای با موفقیت در کانال ارسال شدند!")
-
-if __name__ == "__main__":
-    main()
+        elif
