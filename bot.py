@@ -49,23 +49,6 @@ def get_tester_location():
     except Exception:
         return "US 🇺🇸"
 
-def tcp_ping(ip, port):
-    if not ip or not port:
-        return "🟡 نامشخص"
-    try:
-        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
-            ip = socket.gethostbyname(ip)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(2.0)
-        start = time.time()
-        s.connect((ip, int(port)))
-        end = time.time()
-        s.close()
-        ping_ms = int((end - start) * 1000)
-        return f"🟢 متصل ({ping_ms}ms)"
-    except Exception:
-        return "🔴 تایم‌اوت"
-
 def get_real_location(ip):
     if not ip: 
         return "مخفی (پشت CDN) ☁️"
@@ -85,15 +68,26 @@ def get_real_location(ip):
         pass
     return "نامشخص 🌍"
 
-def decode_base64(text):
-    text = text.strip()
-    missing_padding = len(text) % 4
-    if missing_padding != 0:
-        text += '=' * (4 - missing_padding)
+def tcp_ping(ip, port):
+    """
+    در این نسخه جدید، پینگ فقط برای اطلاع‌رسانی است و 
+    کانفیگ به خاطر پینگ ندادن حذف نمی‌شود.
+    """
+    if not ip or not port:
+        return "🟡 وضعیت: مخفی (تست فقط در ایران)"
     try:
-        return base64.b64decode(text).decode('utf-8', errors='ignore')
+        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
+            ip = socket.gethostbyname(ip)
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1.5)
+        start = time.time()
+        s.connect((ip, int(port)))
+        end = time.time()
+        s.close()
+        ping_ms = int((end - start) * 1000)
+        return f"🟢 متصل ({ping_ms}ms) - تست خارجی"
     except Exception:
-        return ""
+        return "🔵 مسدود برای خارج (احتمالاً سالم در ایران)"
 
 def parse_config_info(config_str):
     protocol = "نامشخص"
@@ -115,28 +109,17 @@ def parse_config_info(config_str):
             match = re.search(r'://[^@]+@([^:]+):(\d+)', config_str)
             if match:
                 ip, port = match.groups()
-        else:
-            b64_str = config_str[8:]
-            missing_padding = len(b64_str) % 4
-            if missing_padding != 0:
-                b64_str += '=' * (4 - missing_padding)
-            json_str = base64.b64decode(b64_str).decode('utf-8')
-            data = json.loads(json_str)
-            ip = data.get("add", "")
-            port = data.get("port", "")
     except Exception:
         pass
     return protocol, name, ip, port
 
 def run_bot():
-    # بزرگترین لیست منابع فعال و قدرتمند
+    # منابعی که مستقیماً از کانال‌های تلگرامی ایرانی استخراج می‌شوند
     SOURCES = [
         "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
         "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/vless",
-        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
-        "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
-        "https://raw.githubusercontent.com/w177140/v2rayN-configs/main/vless.txt",
-        "https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt"
+        "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity",
+        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt"
     ]
     
     all_configs = []
@@ -145,27 +128,16 @@ def run_bot():
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 text = response.text
-                
-                # استراتژی 1: جستجو در متن ساده
-                configs_plain = re.findall(r'(vless://[^\s<>"\']+|trojan://[^\s<>"\']+|vmess://[^\s<>"\']+)', text)
+                configs_plain = re.findall(r'(vless://[^\s<>"\']+|trojan://[^\s<>"\']+)', text)
                 all_configs.extend(configs_plain)
-                
-                # استراتژی 2: جستجو در حالت کدگذاری شده (Base64)
-                try:
-                    decoded = decode_base64(text)
-                    if decoded:
-                        configs_b64 = re.findall(r'(vless://[^\s<>"\']+|trojan://[^\s<>"\']+|vmess://[^\s<>"\']+)', decoded)
-                        all_configs.extend(configs_b64)
-                except Exception:
-                    pass
         except Exception:
             continue
 
     if not all_configs:
-        send_msg("⚠️ <b>ربات:</b> هیچ کانفیگی در منابع یافت نشد یا سرورها مسدود هستند.")
+        send_msg("⚠️ <b>ربات:</b> متاسفانه منابع ایرانی در حال حاضر خالی هستند یا آپدیت نشده‌اند.")
         return
 
-    # حذف تکراری‌ها و حفظ ترتیب (از آخر به اول برای دریافت جدیدترین‌ها)
+    # استخراج جدیدترین‌ها (از آخر لیست به اول)
     seen = set()
     unique = []
     for c in reversed(all_configs):
@@ -173,64 +145,51 @@ def run_bot():
             unique.append(c)
             seen.add(c)
             
-    # اولویت شدید با VLESS و Reality
+    # امتیازدهی: فقط VLESS و Reality که در ایران کار می‌کنند
     def get_score(conf):
         conf_lower = conf.lower()
         score = 0
-        if "reality" in conf_lower: score += 10
-        if "vless://" in conf_lower: score += 5
-        if "trojan://" in conf_lower: score += 2
+        if "reality" in conf_lower: score += 20
+        if "vless://" in conf_lower: score += 10
+        # کانفیگ‌های مربوط به اپراتورهای ایران امتیاز بیشتری می‌گیرند
+        if "mci" in conf_lower or "mtn" in conf_lower or "irancell" in conf_lower: score += 15
         return score
 
     unique.sort(key=get_score, reverse=True)
 
+    # انتخاب 3 کانفیگ برتر بدون دور انداختن آن‌ها به خاطر پینگ
     final_configs = []
-    # فقط 30 تای اول رو تست میکنیم که گیت‌هاب خسته نشه
-    for conf in unique[:30]:
+    for conf in unique[:3]:
         protocol, name, ip, port = parse_config_info(conf)
         ping_status = tcp_ping(ip, port)
         
-        item = {
+        final_configs.append({
             "conf": conf,
             "protocol": protocol,
             "ip": ip,
+            "name": name,
             "ping": ping_status
-        }
-        
-        if "متصل" in ping_status:
-            final_configs.append(item)
-            
-        if len(final_configs) >= 3:
-            break
-
-    # اگر متصل پیدا نکرد، باز هم 3 تا میذاره که کانال خالی نمونه
-    if len(final_configs) < 3:
-        needed = 3 - len(final_configs)
-        untested = [c for c in unique if c not in [f['conf'] for f in final_configs]]
-        for conf in untested[:needed]:
-            protocol, name, ip, port = parse_config_info(conf)
-            final_configs.append({
-                "conf": conf,
-                "protocol": protocol,
-                "ip": ip,
-                "ping": "🔴 بررسی نشده (فایروال روشن)"
-            })
+        })
 
     iran_time_str = get_iran_time()
-    tester_loc = get_tester_location()
 
     for item in final_configs:
         real_location = get_real_location(item['ip'])
+        
+        # اگر نام اصلی حاوی اسم اپراتورهای ایرانی بود، آن را نگه می‌داریم
+        name_lower = item['name'].lower()
+        if "mci" in name_lower or "mtn" in name_lower or "irancell" in name_lower or "mkb" in name_lower:
+            real_location = f"{real_location} ({item['name']})"
         
         safe_conf = html.escape(item['conf'])
         safe_loc = html.escape(real_location)
         
         message = f"""
-🚀 <b>کانفیگ جدید و ضد فیلتر</b>
+🚀 <b>کانفیگ جدید و اختصاصی ایران</b>
 
 📍 <b>لوکیشن:</b> {safe_loc}
 ⚙️ <b>پروتکل:</b> {item['protocol']}
-📡 <b>وضعیت سرور:</b> {item['ping']} (تست از {tester_loc})
+📡 <b>وضعیت سرور:</b> {item['ping']}
 ⏰ <b>زمان استخراج:</b> {iran_time_str}
 
 👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
@@ -242,12 +201,8 @@ def run_bot():
         res = send_msg(message.strip())
         
         if res.status_code != 200:
-            err = f"❌ <b>تلگرام اجازه ارسال یک کانفیگ را نداد! دلیل ارور:</b>\n\n<pre>{html.escape(res.text)}</pre>"
-            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
-                "chat_id": CHANNEL_ID,
-                "text": err,
-                "parse_mode": "HTML"
-            })
+            err = f"❌ <b>تلگرام پیام را رد کرد! ارور:</b>\n\n<pre>{html.escape(res.text)}</pre>"
+            send_msg(err)
             
         time.sleep(3)
 
