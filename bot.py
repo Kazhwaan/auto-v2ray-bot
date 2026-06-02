@@ -3,16 +3,20 @@ import os
 import base64
 import sys
 
-# دریافت اطلاعات مخفی و حذف فاصله‌های اضافی (باگ بزرگ توکن‌ها)
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
-CHANNEL_ID = os.environ.get("CHANNEL_ID", "").strip()
+# دریافت اطلاعات مخفی
+raw_token = os.environ.get("BOT_TOKEN", "")
+raw_channel = os.environ.get("CHANNEL_ID", "")
+
+# 🧹 فیلتر جادویی: حذف تمام کاراکترهای نامرئی و غیرانگلیسی که موقع کپی کردن اضافه میشن
+BOT_TOKEN = "".join(c for c in raw_token if c.isascii()).strip()
+CHANNEL_ID = "".join(c for c in raw_channel if c.isascii()).strip()
 
 SOURCE_URL = "https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt"
 
 def main():
     if not BOT_TOKEN or not CHANNEL_ID:
         print("ارور سیستم: توکن یا آیدی کانال خالی است!")
-        sys.exit(1) # باعث ایجاد ارور قرمز در گیت‌هاب می‌شود
+        sys.exit(1)
 
     try:
         response = requests.get(SOURCE_URL, timeout=15)
@@ -33,7 +37,6 @@ def main():
             message += f"`{conf}`\n\n"
         message += "💡 برای کپی روی کانفیگ کلیک کنید."
 
-        # تنظیمات ارسال به تلگرام (همراه با حل مشکل فرمت پیام)
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
             "chat_id": CHANNEL_ID,
@@ -44,7 +47,6 @@ def main():
         
         tg_res = requests.post(url, json=payload)
         
-        # بررسی پاسخ دقیق تلگرام
         if tg_res.status_code != 200:
             print(f"تلگرام پیام را رد کرد! دلیل ارور:\n{tg_res.text}")
             sys.exit(1)
