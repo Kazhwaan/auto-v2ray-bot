@@ -14,7 +14,6 @@ from datetime import datetime, timezone, timedelta
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "").strip()
 
-# تابع قدرتمند برای ارسال هر پیامی (حتی ارورها) به کانال
 def send_msg(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
@@ -33,7 +32,6 @@ def main():
     try:
         run_bot()
     except Exception as e:
-        # 🚨 اگر خود ربات کرش کرد، ارور رو می‌فرسته تو کانالت!
         error_msg = f"❌ <b>ارور در سرور گیت‌هاب:</b>\n\n<pre>{html.escape(str(e))}</pre>"
         send_msg(error_msg)
         sys.exit(1)
@@ -60,4 +58,21 @@ def tcp_ping(ip, port):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(2.0)
         start = time.time()
-        s.connect((ip, int(port
+        s.connect((ip, int(port)))
+        end = time.time()
+        s.close()
+        ping_ms = int((end - start) * 1000)
+        return f"🟢 متصل ({ping_ms}ms)"
+    except:
+        return "🔴 تایم‌اوت"
+
+def get_real_location(ip):
+    if not ip: return "مخفی (پشت CDN) ☁️"
+    try:
+        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
+            ip = socket.gethostbyname(ip)
+        res = requests.get(f"https://ipinfo.io/{ip}/json", timeout=3).json()
+        if "country" in res:
+            cc = res["country"]
+            flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
+            city = res.get("city", "")
