@@ -25,23 +25,19 @@ def send_msg(text):
 
 def main():
     if not BOT_TOKEN or not CHANNEL_ID:
-        print("ارور: توکن یا آیدی کانال خالی است!")
         sys.exit(1)
-        
     try:
         run_bot()
     except Exception as e:
-        error_msg = f"❌ <b>ارور در سرور گیت‌هاب:</b>\n\n<pre>{html.escape(str(e))}</pre>"
-        send_msg(error_msg)
+        send_msg(f"❌ <b>ارور سرور:</b>\n<pre>{html.escape(str(e))}</pre>")
         sys.exit(1)
 
 def get_iran_time():
     iran_tz = timezone(timedelta(hours=3, minutes=30))
-    return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S") + " (به وقت ایران)"
+    return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S")
 
 def get_real_location(ip):
-    if not ip: 
-        return "مخفی (پشت CDN) ☁️"
+    if not ip: return "مخفی (پشت CDN) ☁️"
     try:
         if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
             ip = socket.gethostbyname(ip)
@@ -50,173 +46,105 @@ def get_real_location(ip):
             cc = res["country"]
             flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
             city = res.get("city", "")
-            if city:
-                return f"{city}, {cc} {flag}"
-            else:
-                return f"{cc} {flag}"
-    except Exception:
+            return f"{city}, {cc} {flag}" if city else f"{cc} {flag}"
+    except:
         pass
     return "نامشخص 🌍"
 
 def tcp_ping(ip, port):
-    if not ip or not port:
-        return "🟡 وضعیت: مخفی (تست فقط در ایران)"
+    if not ip or not port: return "🟡 وضعیت: مخفی"
     try:
-        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
-            ip = socket.gethostbyname(ip)
+        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip): ip = socket.gethostbyname(ip)
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(1.5)
         start = time.time()
         s.connect((ip, int(port)))
         end = time.time()
         s.close()
-        ping_ms = int((end - start) * 1000)
-        return f"🟢 متصل ({ping_ms}ms) - تست خارجی"
-    except Exception:
-        return "🔵 مسدود برای خارج (سالم در ایران)"
+        return f"🟢 متصل ({int((end - start) * 1000)}ms)"
+    except:
+        return "🔵 فیلترشده (نیازمند فرگمنت)"
 
 def parse_config_info(config_str):
-    protocol = "نامشخص"
-    name = "مخفی 🌍"
-    ip = ""
-    port = ""
+    protocol, name, ip, port = "نامشخص", "مخفی 🌍", "", ""
     try:
-        if config_str.startswith("vless://"):
-            protocol = "VLESS 🛡️"
-        elif config_str.startswith("trojan://"):
-            protocol = "Trojan 🐎"
-        elif config_str.startswith("vmess://"):
-            protocol = "VMess 🪪"
-            
-        if "#" in config_str:
-            name = urllib.parse.unquote(config_str.split("#")[1])
-            
-        if not config_str.startswith("vmess://"):
-            match = re.search(r'://[^@]+@([^:]+):(\d+)', config_str)
-            if match:
-                ip, port = match.groups()
-    except Exception:
+        if config_str.startswith("vless://"): protocol = "VLESS 🛡️"
+        elif config_str.startswith("trojan://"): protocol = "Trojan 🐎"
+        
+        if "#" in config_str: name = urllib.parse.unquote(config_str.split("#")[1])
+        
+        match = re.search(r'://[^@]+@([^:]+):(\d+)', config_str)
+        if match: ip, port = match.groups()
+    except:
         pass
     return protocol, name, ip, port
 
 def safe_base64_decode(text):
-    """رمزگشای وحشی: هرچی Base64 باشه رو به زور باز میکنه"""
     try:
-        text = text.strip()
-        text = re.sub(r'\s+', '', text)
-        missing_padding = len(text) % 4
-        if missing_padding != 0:
-            text += '=' * (4 - missing_padding)
+        text = re.sub(r'\s+', '', text.strip())
+        text += '=' * (len(text) % 4)
         return base64.b64decode(text).decode('utf-8', errors='ignore')
     except:
         return ""
 
 def run_bot():
-    # بزرگ‌ترین لیست منابعِ آپدیت‌شده در کل گیت‌هاب
     SOURCES = [
         "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
         "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/vless",
         "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
         "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
-        "https://raw.githubusercontent.com/w177140/v2rayN-configs/main/vless.txt",
-        "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity",
-        "https://raw.githubusercontent.com/ts-sf/fly/main/v2",
-        "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
-        "https://raw.githubusercontent.com/Epodonnis/v2ray-configs/main/All_Configs_Sub.txt",
-        "https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.txt"
+        "https://raw.githubusercontent.com/w177140/v2rayN-configs/main/vless.txt"
     ]
     
     all_configs = []
     for url in SOURCES:
         try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                text = response.text
-                
-                # ۱. شکار مستقیم تو متن ساده
-                configs_plain = re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+|vmess://[^\s<>]+)', text)
-                all_configs.extend(configs_plain)
-                
-                # ۲. شکار تو متن‌های رمزگذاری شده (Base64)
-                decoded_text = safe_base64_decode(text)
-                if decoded_text:
-                    configs_b64 = re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+|vmess://[^\s<>]+)', decoded_text)
-                    all_configs.extend(configs_b64)
-        except Exception:
-            continue
+            res = requests.get(url, timeout=10)
+            if res.status_code == 200:
+                all_configs.extend(re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+)', res.text))
+                decoded = safe_base64_decode(res.text)
+                if decoded: all_configs.extend(re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+)', decoded))
+        except: continue
 
-    if not all_configs:
-        send_msg("⚠️ <b>ربات:</b> متاسفانه تمام ۱۰ منبع اصلی مسدود یا خالی هستند! لطفاً بعداً تلاش کنید.")
-        return
+    if not all_configs: return send_msg("⚠️ <b>ربات:</b> تمام منابع مسدود هستند.")
 
-    # حذف تکراری‌ها و نگه‌داشتن جدیدترین‌ها
-    seen = set()
-    unique = []
-    for c in reversed(all_configs):
-        if c not in seen:
-            unique.append(c)
-            seen.add(c)
-            
-    # سیستم امتیازدهی به شدت حساس برای نت ایران
+    unique = list(dict.fromkeys(reversed(all_configs)))
+    
     def get_score(conf):
-        conf_lower = conf.lower()
-        score = 0
-        # اگر کلماتی مثل mahsa یا اپراتورها تو اسمش بود رو هوا بزن!
-        if "mahsa" in conf_lower: score += 50
-        if "reality" in conf_lower: score += 20
-        if "vless://" in conf_lower: score += 10
-        if "mci" in conf_lower or "mtn" in conf_lower or "irancell" in conf_lower or "rightel" in conf_lower: score += 15
-        if "vmess://" in conf_lower: score -= 5 # VMess رو کمتر دوست داریم چون تو ایران ضعیفه
-        return score
+        c = conf.lower()
+        return (20 if "reality" in c else 0) + (15 if any(x in c for x in ["mci","mtn","irancell","mahsa"]) else 0) + (10 if "vless" in c else 0)
 
     unique.sort(key=get_score, reverse=True)
 
-    # انتخاب ۳ کانفیگ اول (که بالاترین امتیاز رو برای ایران دارن)
     final_configs = []
-    for conf in unique[:3]:
+    for conf in unique[:40]:
         protocol, name, ip, port = parse_config_info(conf)
-        ping_status = tcp_ping(ip, port)
-        
-        final_configs.append({
-            "conf": conf,
-            "protocol": protocol,
-            "ip": ip,
-            "name": name,
-            "ping": ping_status
-        })
+        ping = tcp_ping(ip, port)
+        if "متصل" in ping: final_configs.append({"conf": conf, "protocol": protocol, "ip": ip, "name": name, "ping": ping})
+        if len(final_configs) >= 5: break # ارسال ۵ کانفیگ برای افزایش شانس
 
-    iran_time_str = get_iran_time()
+    iran_time = get_iran_time()
 
     for item in final_configs:
-        real_location = get_real_location(item['ip'])
+        loc = html.escape(get_real_location(item['ip']))
+        conf_safe = html.escape(item['conf'])
         
-        name_lower = item['name'].lower()
-        if "mci" in name_lower or "mtn" in name_lower or "irancell" in name_lower or "mahsa" in name_lower:
-            real_location = f"{real_location} ({item['name']})"
-        
-        safe_conf = html.escape(item['conf'])
-        safe_loc = html.escape(real_location)
-        
-        message = f"""
-🚀 <b>کانفیگ فوق‌سریع و اختصاصی</b>
+        msg = f"""
+🚀 <b>کانفیگ جدید و ضد فیلتر</b>
 
-📍 <b>لوکیشن:</b> {safe_loc}
+📍 <b>لوکیشن:</b> {loc}
 ⚙️ <b>پروتکل:</b> {item['protocol']}
-📡 <b>وضعیت سرور:</b> {item['ping']}
-⏰ <b>زمان استخراج:</b> {iran_time_str}
+⏰ <b>آپدیت:</b> {iran_time}
 
-👇 <b>برای اتصال روی کادر زیر ضربه بزنید:</b>
+💡 <i>در صورت عدم اتصال، حتماً گزینه <b>Fragment (فرگمنت)</b> را در برنامه خود روشن کنید تا فیلترینگ دور زده شود.</i>
 
-<code>{safe_conf}</code>
+👇 <b>برای اتصال ضربه بزنید:</b>
+
+<code>{conf_safe}</code>
 
 🆔 {CHANNEL_ID}
 """
-        res = send_msg(message.strip())
-        
-        if res.status_code != 200:
-            err = f"❌ <b>تلگرام پیام را رد کرد! ارور:</b>\n\n<pre>{html.escape(res.text)}</pre>"
-            send_msg(err)
-            
+        send_msg(msg.strip())
         time.sleep(3)
 
 if __name__ == "__main__":
