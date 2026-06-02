@@ -2,29 +2,25 @@ name: Auto V2Ray Bot
 
 on:
   schedule:
-    # این کد به گیت‌هاب می‌گوید هر ۶ ساعت یک‌بار ربات را اجرا کن
-    - cron: '0 * * * *'
-  # این خط به تو اجازه می‌دهد که خودت هم هر وقت خواستی ربات را دستی روشن کنی
-  workflow_dispatch: 
+    - cron: '0 * * * *' # اجرا در هر ساعت
+  workflow_dispatch: # دکمه اجرای دستی
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
-
-    - name: Install requirements
-      run: pip install -r requirements.txt
-
-    - name: Run the bot
-      env:
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
-      run: python bot.py
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10' # نسخه پایدار پایتون
+          
+      - name: Install dependencies
+        run: pip install requests
+        
+      - name: Run Python Script
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+        run: python bot.py
