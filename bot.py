@@ -8,7 +8,6 @@ import json
 import time
 import socket
 import html
-import traceback
 from datetime import datetime, timezone, timedelta
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
@@ -40,15 +39,6 @@ def get_iran_time():
     iran_tz = timezone(timedelta(hours=3, minutes=30))
     return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S") + " (به وقت ایران)"
 
-def get_tester_location():
-    try:
-        res = requests.get("https://ipinfo.io/json", timeout=3).json()
-        cc = res.get("country", "US")
-        flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
-        return f"{cc} {flag}"
-    except Exception:
-        return "US 🇺🇸"
-
 def get_real_location(ip):
     if not ip: 
         return "مخفی (پشت CDN) ☁️"
@@ -69,10 +59,6 @@ def get_real_location(ip):
     return "نامشخص 🌍"
 
 def tcp_ping(ip, port):
-    """
-    در این نسخه جدید، پینگ فقط برای اطلاع‌رسانی است و 
-    کانفیگ به خاطر پینگ ندادن حذف نمی‌شود.
-    """
     if not ip or not port:
         return "🟡 وضعیت: مخفی (تست فقط در ایران)"
     try:
@@ -87,7 +73,7 @@ def tcp_ping(ip, port):
         ping_ms = int((end - start) * 1000)
         return f"🟢 متصل ({ping_ms}ms) - تست خارجی"
     except Exception:
-        return "🔵 مسدود برای خارج (احتمالاً سالم در ایران)"
+        return "🔵 مسدود برای خارج (سالم در ایران)"
 
 def parse_config_info(config_str):
     protocol = "نامشخص"
@@ -113,13 +99,31 @@ def parse_config_info(config_str):
         pass
     return protocol, name, ip, port
 
+def safe_base64_decode(text):
+    """رمزگشای وحشی: هرچی Base64 باشه رو به زور باز میکنه"""
+    try:
+        text = text.strip()
+        text = re.sub(r'\s+', '', text)
+        missing_padding = len(text) % 4
+        if missing_padding != 0:
+            text += '=' * (4 - missing_padding)
+        return base64.b64decode(text).decode('utf-8', errors='ignore')
+    except:
+        return ""
+
 def run_bot():
-    # منابعی که مستقیماً از کانال‌های تلگرامی ایرانی استخراج می‌شوند
+    # بزرگ‌ترین لیست منابعِ آپدیت‌شده در کل گیت‌هاب
     SOURCES = [
         "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
         "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/vless",
+        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
+        "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
+        "https://raw.githubusercontent.com/w177140/v2rayN-configs/main/vless.txt",
         "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity",
-        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt"
+        "https://raw.githubusercontent.com/ts-sf/fly/main/v2",
+        "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
+        "https://raw.githubusercontent.com/Epodonnis/v2ray-configs/main/All_Configs_Sub.txt",
+        "https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.txt"
     ]
     
     all_configs = []
@@ -128,16 +132,24 @@ def run_bot():
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 text = response.text
-                configs_plain = re.findall(r'(vless://[^\s<>"\']+|trojan://[^\s<>"\']+)', text)
+                
+                # ۱. شکار مستقیم تو متن ساده
+                configs_plain = re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+|vmess://[^\s<>]+)', text)
                 all_configs.extend(configs_plain)
+                
+                # ۲. شکار تو متن‌های رمزگذاری شده (Base64)
+                decoded_text = safe_base64_decode(text)
+                if decoded_text:
+                    configs_b64 = re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+|vmess://[^\s<>]+)', decoded_text)
+                    all_configs.extend(configs_b64)
         except Exception:
             continue
 
     if not all_configs:
-        send_msg("⚠️ <b>ربات:</b> متاسفانه منابع ایرانی در حال حاضر خالی هستند یا آپدیت نشده‌اند.")
+        send_msg("⚠️ <b>ربات:</b> متاسفانه تمام ۱۰ منبع اصلی مسدود یا خالی هستند! لطفاً بعداً تلاش کنید.")
         return
 
-    # استخراج جدیدترین‌ها (از آخر لیست به اول)
+    # حذف تکراری‌ها و نگه‌داشتن جدیدترین‌ها
     seen = set()
     unique = []
     for c in reversed(all_configs):
@@ -145,19 +157,21 @@ def run_bot():
             unique.append(c)
             seen.add(c)
             
-    # امتیازدهی: فقط VLESS و Reality که در ایران کار می‌کنند
+    # سیستم امتیازدهی به شدت حساس برای نت ایران
     def get_score(conf):
         conf_lower = conf.lower()
         score = 0
+        # اگر کلماتی مثل mahsa یا اپراتورها تو اسمش بود رو هوا بزن!
+        if "mahsa" in conf_lower: score += 50
         if "reality" in conf_lower: score += 20
         if "vless://" in conf_lower: score += 10
-        # کانفیگ‌های مربوط به اپراتورهای ایران امتیاز بیشتری می‌گیرند
-        if "mci" in conf_lower or "mtn" in conf_lower or "irancell" in conf_lower: score += 15
+        if "mci" in conf_lower or "mtn" in conf_lower or "irancell" in conf_lower or "rightel" in conf_lower: score += 15
+        if "vmess://" in conf_lower: score -= 5 # VMess رو کمتر دوست داریم چون تو ایران ضعیفه
         return score
 
     unique.sort(key=get_score, reverse=True)
 
-    # انتخاب 3 کانفیگ برتر بدون دور انداختن آن‌ها به خاطر پینگ
+    # انتخاب ۳ کانفیگ اول (که بالاترین امتیاز رو برای ایران دارن)
     final_configs = []
     for conf in unique[:3]:
         protocol, name, ip, port = parse_config_info(conf)
@@ -176,23 +190,22 @@ def run_bot():
     for item in final_configs:
         real_location = get_real_location(item['ip'])
         
-        # اگر نام اصلی حاوی اسم اپراتورهای ایرانی بود، آن را نگه می‌داریم
         name_lower = item['name'].lower()
-        if "mci" in name_lower or "mtn" in name_lower or "irancell" in name_lower or "mkb" in name_lower:
+        if "mci" in name_lower or "mtn" in name_lower or "irancell" in name_lower or "mahsa" in name_lower:
             real_location = f"{real_location} ({item['name']})"
         
         safe_conf = html.escape(item['conf'])
         safe_loc = html.escape(real_location)
         
         message = f"""
-🚀 <b>کانفیگ جدید و اختصاصی ایران</b>
+🚀 <b>کانفیگ فوق‌سریع و اختصاصی</b>
 
 📍 <b>لوکیشن:</b> {safe_loc}
 ⚙️ <b>پروتکل:</b> {item['protocol']}
 📡 <b>وضعیت سرور:</b> {item['ping']}
 ⏰ <b>زمان استخراج:</b> {iran_time_str}
 
-👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
+👇 <b>برای اتصال روی کادر زیر ضربه بزنید:</b>
 
 <code>{safe_conf}</code>
 
