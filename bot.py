@@ -30,7 +30,6 @@ def parse_config_info(config_str):
     return protocol, name
 
 def run_bot():
-    # لینک‌های اصلی برای استخراج کانفیگ‌های تکی
     SOURCES = [
         "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix",
         "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt"
@@ -45,24 +44,26 @@ def run_bot():
         except: continue
 
     unique = list(dict.fromkeys(reversed(all_configs)))
-    final_configs = unique[:3] # ۳ تا کانفیگ داغ تکی
+    final_configs = unique[:3] 
 
     iran_time = get_iran_time()
 
-    # ۱. ارسال لینک‌های اشتراک دائمی با پروکسی ضد فیلتر (بدون نیاز به VPN آپدیت میشن)
+    # پیام اشتراک با پروکسی جدید (ghp.ci) و بک‌آپ مستقیم
     sub_message = f"""
-🌟 <b>لینک‌های اشتراک (سابسکریپشن) - آپدیت بدون نیاز به فیلترشکن</b> 🌟
+🌟 <b>لینک‌های اشتراک (سابسکریپشن) - آپدیت خودکار</b> 🌟
 
-با کپی کردن لینک‌های زیر در هیدیفای (Hiddify) یا v2rayNG و زدن دکمه آپدیت، برنامه شما صدها کانفیگ را بررسی کرده و <b>سالم‌ترین‌های مخصوص نت شما</b> را جدا می‌کند!
+لینک‌های زیر را در هیدیفای (Hiddify) یا v2rayNG کپی کرده و آپدیت کنید تا صدها کانفیگ دریافت کنید.
 
-👇 <b>لینک اشتراک اول (پیشنهادی و ترکیبی):</b>
-<code>https://mirror.ghproxy.com/https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt</code>
+🟢 <b>لینک‌های ضد فیلتر (آپدیت بدون نیاز به VPN):</b>
+<code>https://ghp.ci/https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt</code>
 
-👇 <b>لینک اشتراک دوم (مخصوص همراه اول و مخابرات):</b>
-<code>https://mirror.ghproxy.com/https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix</code>
+<code>https://ghp.ci/https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix</code>
 
-👇 <b>لینک اشتراک سوم (مخصوص ایرانسل):</b>
-<code>https://mirror.ghproxy.com/https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt</code>
+---
+🔴 <b>لینک‌های مستقیم (اگر لینک‌های بالا کار نکردند، برای آپدیت این لینک‌ها باید ابتدا یک فیلترشکن موقت روشن کنید):</b>
+<code>https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt</code>
+
+<code>https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix</code>
 
 ⏰ <b>زمان آپدیت:</b> {iran_time}
 🆔 {CHANNEL_ID}
@@ -70,7 +71,7 @@ def run_bot():
     send_msg(sub_message.strip())
     time.sleep(3)
 
-    # ۲. ارسال کانفیگ‌های تکی
+    # ارسال کانفیگ‌های تکی
     for conf in final_configs:
         protocol, name = parse_config_info(conf)
         safe_conf = html.escape(conf)
@@ -82,7 +83,7 @@ def run_bot():
 📍 <b>نام:</b> {safe_name}
 ⚙️ <b>پروتکل:</b> {protocol}
 
-💡 <i>در صورت عدم اتصال، حتماً گزینه <b>Fragment (فرگمنت)</b> را در برنامه خود روشن کنید.</i>
+💡 <i>در صورت عدم اتصال، حتماً گزینه <b>Fragment (فرگمنت)</b> را روشن کنید.</i>
 
 👇 <b>برای اتصال ضربه بزنید:</b>
 
