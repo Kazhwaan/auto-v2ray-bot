@@ -12,10 +12,11 @@ from datetime import datetime, timezone, timedelta
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "").strip()
 
+# منابع جدید و بهینه‌شده برای اینترنت ایران
 SOURCES = [
-    "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix",
-    "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
-    "https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt"
+    "https://raw.githubusercontent.com/soroushmirzaei/telegram-configs-collector/main/protocols/vless",
+    "https://raw.githubusercontent.com/soroushmirzaei/telegram-configs-collector/main/protocols/vmess",
+    "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix"
 ]
 
 def get_tester_location():
@@ -47,7 +48,7 @@ def tcp_ping(ip, port):
         ping_ms = int((end - start) * 1000)
         return f"🟢 متصل ({ping_ms}ms)"
     except:
-        return "🔴 تایم‌اوت (احتمالاً مسدود برای سرورهای خارجی)"
+        return "🔴 تایم‌اوت"
 
 def get_real_location(ip, original_name):
     clean_name = re.sub(r'[^\w\s\-\.]', '', original_name).strip()
@@ -143,12 +144,18 @@ def main():
         except Exception as e:
             pass
 
-    unique_configs = list(set(all_configs))
+    # ترفند جدید: خواندن لیست از آخر به اول (برای گرفتن داغ‌ترین و جدیدترین کانفیگ‌ها)
+    seen = set()
+    unique_configs = []
+    for conf in reversed(all_configs):
+        if conf not in seen:
+            unique_configs.append(conf)
+            seen.add(conf)
+            
     if not unique_configs:
         print("منبع خالی است.")
         sys.exit(0)
 
-    # جدا کردن کانفیگ‌های تست شده و تست نشده
     final_configs = []
     untested_configs = []
     
@@ -172,13 +179,11 @@ def main():
         if len(final_configs) >= 3:
             break
 
-    # ترفند طلایی: اگر کمتر از 3 کانفیگ متصل پیدا کردیم، بقیه رو از همون لیست تایم‌اوت شده‌ها برمیداریم
     if len(final_configs) < 3:
         needed = 3 - len(final_configs)
         final_configs.extend(untested_configs[:needed])
 
     if not final_configs:
-        print("هیچ کانفیگی برای ارسال پیدا نشد.")
         sys.exit(1)
 
     api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
