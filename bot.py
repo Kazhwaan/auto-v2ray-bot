@@ -13,12 +13,11 @@ from datetime import datetime, timezone, timedelta
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "").strip()
 
-# منابع جدید، فعال و قدرتمند (جایگزین منابع مسدود شده)
+# منابع اختصاصی فقط برای VLESS و Reality (مخصوص فیلترینگ سختگیرانه ایران)
 SOURCES = [
-    "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
-    "https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/main/vless_configs.txt",
-    "https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/main/vmess_configs.txt",
-    "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix"
+    "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
+    "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
+    "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity"
 ]
 
 def get_tester_location():
@@ -41,6 +40,13 @@ def tcp_ping(ip, port):
     if not ip or not port:
         return "🟡 نامشخص"
     try:
+        # اگر آی‌پی دامنه بود اول تبدیلش میکنیم
+        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
+            try:
+                ip = socket.gethostbyname(ip)
+            except:
+                return "🔴 تایم‌اوت"
+                
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(2.0)
         start = time.time()
@@ -50,17 +56,19 @@ def tcp_ping(ip, port):
         ping_ms = int((end - start) * 1000)
         return f"🟢 متصل ({ping_ms}ms)"
     except:
-        return "🔴 تایم‌اوت (احتمالاً مسدود برای سرورهای خارجی)"
+        return "🔴 تایم‌اوت"
 
-def get_real_location(ip, original_name):
-    clean_name = re.sub(r'[^\w\s\-\.]', '', original_name).strip()
-    if not clean_name:
-        clean_name = "سرور ناشناس"
-
+def get_real_location(ip):
+    """رفع مشکل لوکیشن EbraSha: اگر آی‌پی مخفی بود دیگه اسم سازنده رو چاپ نمیکنه"""
     if not ip:
-        return f"{clean_name} 🌍"
-
+        return "مخفی (پشت CDN) ☁️"
     try:
+        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
+            try:
+                ip = socket.gethostbyname(ip)
+            except:
+                return "مخفی (دامنه) 🌐"
+                
         res = requests.get(f"https://ipinfo.io/{ip}/json", timeout=4).json()
         if "country" in res:
             cc = res["country"]
@@ -72,7 +80,7 @@ def get_real_location(ip, original_name):
                 return f"{cc} {flag}"
     except:
         pass
-    return f"{clean_name} 🌍"
+    return "نامشخص 🌍"
 
 def decode_base64(text):
     text = text.strip()
@@ -141,7 +149,8 @@ def main():
                 else:
                     decoded_data = decode_base64(text)
                 
-                configs = re.findall(r'(vless://\S+|vmess://\S+|trojan://\S+)', decoded_data)
+                # فقط VLESS و Trojan رو استخراج میکنیم (VMess کلا از رده خارج شد)
+                configs = re.findall(r'(vless://\S+|trojan://\S+)', decoded_data)
                 all_configs.extend(configs)
         except Exception as e:
             pass
@@ -167,13 +176,16 @@ def main():
         item = {
             "conf": conf,
             "protocol": protocol,
-            "name": name,
             "ip": ip,
             "ping": ping_status
         }
         
+        # شکار ویژه: اولویت شدید با کانفیگ‌های Reality که تو ایران عالی کار میکنن
         if "متصل" in ping_status:
-            final_configs.append(item)
+            if "reality" in conf.lower():
+                final_configs.insert(0, item) # میذارتش اول لیست
+            else:
+                final_configs.append(item)
         else:
             untested_configs.append(item)
             
@@ -185,50 +197,14 @@ def main():
         final_configs.extend(untested_configs[:needed])
 
     if not final_configs:
-        print("هیچ کانفیگی برای ارسال پیدا نشد.")
         sys.exit(1)
 
     api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     iran_time_str = get_iran_time()
     
-    for item in final_configs:
-        real_location = get_real_location(item['ip'], item['name'])
+    # برای اینکه تو ایران وصل بشن، ۳ تا کانفیگ رو می‌فرستیم
+    for item in final_configs[:3]:
+        # اصلاح لوکیشن با استفاده از تابع جدید
+        real_location = get_real_location(item['ip'])
         
-        # سپر حفاظتی گرافیک: حل مشکل ارسال نشدن به خاطر کاراکترهای & و < در تلگرام
         safe_conf = html.escape(item['conf'])
-        safe_loc = html.escape(real_location)
-        
-        message = f"""
-🚀 <b>کانفیگ جدید و پرسرعت</b>
-
-📍 <b>لوکیشن:</b> {safe_loc}
-⚙️ <b>پروتکل:</b> {item['protocol']}
-📡 <b>وضعیت سرور:</b> {item['ping']} (تست از {tester_loc})
-⏰ <b>زمان استخراج:</b> {iran_time_str}
-
-👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
-
-<code>{safe_conf}</code>
-
-🆔 {CHANNEL_ID}
-"""
-        payload = {
-            "chat_id": CHANNEL_ID,
-            "text": message.strip(),
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True
-        }
-        
-        tg_res = requests.post(api_url, json=payload)
-        
-        # اگر تلگرام به هر دلیلی باز هم پیام رو رد کرد، با ارور قرمز متوقف بشه
-        if tg_res.status_code != 200:
-            print(f"تلگرام پیام را رد کرد! دلیل:\n{tg_res.text}")
-            sys.exit(1)
-            
-        time.sleep(3)
-        
-    print("✅ ارسال موفقیت‌آمیز بود!")
-
-if __name__ == "__main__":
-    main()
