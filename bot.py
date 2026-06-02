@@ -18,10 +18,27 @@ SOURCES = [
     "https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt"
 ]
 
+def get_tester_location():
+    """پیدا کردن کشوری که سرور گیت‌هاب الان توشه"""
+    try:
+        res = requests.get("https://ipinfo.io/json", timeout=5).json()
+        country_code = res.get("country", "US")
+        # ترجمه کدهای معروف به فارسی
+        country_map = {
+            "US": "آمریکا 🇺🇸", 
+            "NL": "هلند 🇳🇱", 
+            "DE": "آلمان 🇩🇪", 
+            "GB": "انگلیس 🇬🇧",
+            "FR": "فرانسه 🇫🇷"
+        }
+        return country_map.get(country_code, f"سرور خارجی ({country_code})")
+    except:
+        return "سرور گیت‌هاب"
+
 def get_iran_time():
     """محاسبه دقیق ساعت و تاریخ ایران"""
     iran_tz = timezone(timedelta(hours=3, minutes=30))
-    return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S")
+    return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S") + " (به وقت ایران)"
 
 def tcp_ping(ip, port):
     """تست زنده بودن سرور و گرفتن پینگ واقعی"""
@@ -29,7 +46,7 @@ def tcp_ping(ip, port):
         return "🟡 نامشخص"
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(2.0) # فقط ۲ ثانیه منتظر جواب میمونه
+        s.settimeout(2.0)
         start = time.time()
         s.connect((ip, int(port)))
         end = time.time()
@@ -37,7 +54,7 @@ def tcp_ping(ip, port):
         ping_ms = int((end - start) * 1000)
         return f"🟢 متصل ({ping_ms}ms)"
     except:
-        return "🔴 تایم‌اوت (سرور خاموش)"
+        return "🔴 تایم‌اوت"
 
 def decode_base64(text):
     text = text.strip()
@@ -50,7 +67,6 @@ def decode_base64(text):
         return ""
 
 def parse_config_info(config_str):
-    """استخراج پروتکل، اسم، آی‌پی و پورت برای تست"""
     protocol = "نامشخص"
     name = "مخفی 🌍"
     ip = ""
@@ -94,8 +110,10 @@ def main():
         print("ارور: توکن یا آیدی کانال خالی است!")
         sys.exit(1)
 
-    all_configs = []
+    # گرفتن لوکیشن تستر در همون ابتدای کار
+    tester_loc = get_tester_location()
 
+    all_configs = []
     for url in SOURCES:
         try:
             response = requests.get(url, timeout=10)
@@ -109,23 +127,17 @@ def main():
                 configs = re.findall(r'(vless://\S+|vmess://\S+|trojan://\S+)', decoded_data)
                 all_configs.extend(configs)
         except Exception as e:
-            print(f"خطا در دریافت از {url}")
+            pass
 
     unique_configs = list(set(all_configs))
-    
     if not unique_configs:
-        print("متاسفانه در هیچکدام از منابع کانفیگی پیدا نشد!")
         sys.exit(0)
 
-    # سیستم هوشمند: تست کانفیگ‌ها و جدا کردن فقط ۳ عدد کانفیگ سالم
     valid_configs = []
-    print("در حال تست پینگ کانفیگ‌ها...")
-    
     for conf in unique_configs:
         protocol, name, ip, port = parse_config_info(conf)
         ping_status = tcp_ping(ip, port)
         
-        # اگر سرور وصل شد، اونو به لیست ارسال اضافه کن
         if "متصل" in ping_status:
             valid_configs.append({
                 "conf": conf,
@@ -134,12 +146,10 @@ def main():
                 "ping": ping_status
             })
         
-        # به محض اینکه ۳ تا سالم پیدا کردیم، دیگه بقیه رو تست نکن
         if len(valid_configs) >= 3:
             break
 
     if not valid_configs:
-        print("هیچ کانفیگ سالمی (تست شده) پیدا نشد. ربات خاموش می‌شود.")
         sys.exit(0)
 
     api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -151,7 +161,7 @@ def main():
 
 📍 <b>لوکیشن:</b> {item['name']}
 ⚙️ <b>پروتکل:</b> {item['protocol']}
-📡 <b>وضعیت سرور:</b> {item['ping']}
+📡 <b>وضعیت سرور:</b> {item['ping']} (تست از {tester_loc})
 ⏰ <b>زمان استخراج:</b> {iran_time_str}
 
 👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
@@ -169,8 +179,6 @@ def main():
         
         requests.post(api_url, json=payload)
         time.sleep(3)
-        
-    print("✅ پیام‌های تست‌شده و حرفه‌ای با موفقیت ارسال شدند!")
 
 if __name__ == "__main__":
     main()
