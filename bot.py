@@ -115,7 +115,8 @@ def run_bot():
         return (20 if "reality" in c else 0) + (15 if any(x in c for x in ["mci","mtn","irancell","mahsa"]) else 0) + (10 if "vless" in c else 0)
 
     unique.sort(key=get_score, reverse=True)
-final_configs = []
+    
+    final_configs = []
     for conf in unique[:40]:
         protocol, name, ip, port = parse_config_info(conf)
         ping = tcp_ping(ip, port)
@@ -146,5 +147,5 @@ final_configs = []
         send_msg(msg.strip())
         time.sleep(3)
 
-if name == "main":
+if __name__ == "__main__":
     main()
