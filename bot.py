@@ -15,50 +15,43 @@ def send_msg(text):
     )
 
 def run_bot():
-    # سورس‌های مادر که خود هیدیفای و مهسا ازشون تغذیه می‌کنن
+    # سورس‌های دائمی و سنگین که هیچ‌وقت آدرسشون عوض نمی‌شه
     SOURCES = [
-        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
-        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
-        "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity"
+        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
+        "https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt"
     ]
     
     all_configs = []
     for url in SOURCES:
         try:
-            # فقط دانلود سریع، بدون معطلی
-            res = requests.get(url, timeout=7)
+            res = requests.get(url, timeout=10)
             if res.status_code == 200:
-                # شکار کانفیگ‌ها
+                # جمع‌آوری مستقیم پروتکل‌های پرسرعت
                 all_configs.extend(re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+)', res.text))
         except:
             continue
 
     if not all_configs:
-        send_msg("⚠️ <b>اخطار:</b> نتوانستم به منابع گیت‌هاب متصل شوم. لطفا لینک‌های اشتراک را دستی در هیدیفای آپدیت کنید.")
+        send_msg("⚠️ منابع موقتاً خالی هستند.")
         return
 
     # حذف تکراری‌ها
     unique = list(dict.fromkeys(all_configs))
     
-    # برداشتن 10 تای آخر (جدیدترین‌هایی که همین الان ساخته شدن)
-    final_configs = unique[-10:]
-    final_configs.reverse()
+    # برداشتن ۱۰ کانفیگ داغ و تازه
+    final_configs = unique[:10]
     
-    # چسباندن کانفیگ‌ها به هم
     bulk_text = "\n\n".join(final_configs)
     safe_bulk = html.escape(bulk_text)
     
-    # محاسبه زمان
     iran_tz = timezone(timedelta(hours=3, minutes=30))
     iran_time = datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S")
 
     msg = f"""
-🔥 <b>بسته ۱۰ تایی کانفیگ‌های داغ (سورس Mahsa و Hiddify)</b> 🔥
+🔥 <b>بسته ۱۰ تایی کانفیگ‌های جدید و پرسرعت VLESS</b> 🔥
 
-💡 <b>راز اتصال ۱۰۰٪ (ترفند هیدیفای):</b>
-اگر می‌خواهید این کانفیگ‌ها مثل بمب کار کنند، باید در برنامه Hiddify تیک <b>Fragment</b> را روشن کنید. هیدیفای این کانفیگ‌ها را با شبکه WARP ترکیب می‌کند تا فیلترینگ دور زده شود.
-
-👇 <b>یک‌بار روی کادر زیر ضربه بزنید تا کل ۱۰ کانفیگ کپی شوند، سپس در هیدیفای + را بزنید:</b>
+💡 <b>آموزش اتصال سریع در ویندوز و گوشی:</b>
+کافیست روی کادر زیر <b>یک‌بار ضربه بزنید</b> تا کل ۱۰ کانفیگ کپی شوند، سپس در برنامه Hiddify یا v2rayNG دکمه <b>+ (کلیپ‌بورد)</b> را بزنید. حتماً تیک <b>Fragment</b> را در تنظیمات برنامه روشن کنید.
 
 <code>{safe_bulk}</code>
 
@@ -73,5 +66,5 @@ if __name__ == "__main__":
     try:
         run_bot()
     except Exception as e:
-        send_msg(f"❌ <b>ارور کرش ربات:</b>\n<pre>{html.escape(str(e))}</pre>")
+        send_msg(f"❌ ارور: {html.escape(str(e))}")
         sys.exit(1)
