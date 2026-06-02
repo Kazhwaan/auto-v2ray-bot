@@ -129,11 +129,14 @@ def parse_config_info(config_str):
     return protocol, name, ip, port
 
 def run_bot():
+    # بزرگترین لیست منابع فعال و قدرتمند
     SOURCES = [
-        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
+        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
+        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/vless",
         "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
-        "https://raw.githubusercontent.com/mehdirzfx/v2ray-sub/main/vless.txt",
-        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix"
+        "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
+        "https://raw.githubusercontent.com/w177140/v2rayN-configs/main/vless.txt",
+        "https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt"
     ]
     
     all_configs = []
@@ -142,13 +145,19 @@ def run_bot():
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 text = response.text
-                if "vmess://" in text or "vless://" in text or "trojan://" in text:
-                    decoded = text
-                else:
-                    decoded = decode_base64(text)
                 
-                configs = re.findall(r'(vless://\S+|trojan://\S+|vmess://\S+)', decoded)
-                all_configs.extend(configs)
+                # استراتژی 1: جستجو در متن ساده
+                configs_plain = re.findall(r'(vless://[^\s<>"\']+|trojan://[^\s<>"\']+|vmess://[^\s<>"\']+)', text)
+                all_configs.extend(configs_plain)
+                
+                # استراتژی 2: جستجو در حالت کدگذاری شده (Base64)
+                try:
+                    decoded = decode_base64(text)
+                    if decoded:
+                        configs_b64 = re.findall(r'(vless://[^\s<>"\']+|trojan://[^\s<>"\']+|vmess://[^\s<>"\']+)', decoded)
+                        all_configs.extend(configs_b64)
+                except Exception:
+                    pass
         except Exception:
             continue
 
@@ -156,6 +165,7 @@ def run_bot():
         send_msg("⚠️ <b>ربات:</b> هیچ کانفیگی در منابع یافت نشد یا سرورها مسدود هستند.")
         return
 
+    # حذف تکراری‌ها و حفظ ترتیب (از آخر به اول برای دریافت جدیدترین‌ها)
     seen = set()
     unique = []
     for c in reversed(all_configs):
@@ -163,6 +173,7 @@ def run_bot():
             unique.append(c)
             seen.add(c)
             
+    # اولویت شدید با VLESS و Reality
     def get_score(conf):
         conf_lower = conf.lower()
         score = 0
@@ -174,7 +185,8 @@ def run_bot():
     unique.sort(key=get_score, reverse=True)
 
     final_configs = []
-    for conf in unique[:25]:
+    # فقط 30 تای اول رو تست میکنیم که گیت‌هاب خسته نشه
+    for conf in unique[:30]:
         protocol, name, ip, port = parse_config_info(conf)
         ping_status = tcp_ping(ip, port)
         
@@ -191,6 +203,7 @@ def run_bot():
         if len(final_configs) >= 3:
             break
 
+    # اگر متصل پیدا نکرد، باز هم 3 تا میذاره که کانال خالی نمونه
     if len(final_configs) < 3:
         needed = 3 - len(final_configs)
         untested = [c for c in unique if c not in [f['conf'] for f in final_configs]]
