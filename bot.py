@@ -47,11 +47,9 @@ def tcp_ping(ip, port):
         ping_ms = int((end - start) * 1000)
         return f"🟢 متصل ({ping_ms}ms)"
     except:
-        return "🔴 تایم‌اوت"
+        return "🔴 تایم‌اوت (احتمالاً مسدود برای سرورهای خارجی)"
 
 def get_real_location(ip, original_name):
-    """رادار آی‌پی: پیدا کردن کشور واقعی و پرچم دقیق آن"""
-    # پاک کردن ایموجی‌های عجیب و غریب از اسم اصلی
     clean_name = re.sub(r'[^\w\s\-\.]', '', original_name).strip()
     if not clean_name:
         clean_name = "سرور ناشناس"
@@ -60,21 +58,17 @@ def get_real_location(ip, original_name):
         return f"{clean_name} 🌍"
 
     try:
-        # جستجوی آی‌پی در دیتابیس جهانی
         res = requests.get(f"https://ipinfo.io/{ip}/json", timeout=4).json()
         if "country" in res:
-            cc = res["country"] # کد دو حرفی کشور مثل US
-            # تبدیل هوشمند کد کشور به پرچم ایموجی
+            cc = res["country"]
             flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
             city = res.get("city", "")
-            
             if city:
                 return f"{city}, {cc} {flag}"
             else:
                 return f"{cc} {flag}"
     except:
         pass
-        
     return f"{clean_name} 🌍"
 
 def decode_base64(text):
@@ -151,21 +145,73 @@ def main():
 
     unique_configs = list(set(all_configs))
     if not unique_configs:
+        print("منبع خالی است.")
         sys.exit(0)
 
-    valid_configs = []
+    # جدا کردن کانفیگ‌های تست شده و تست نشده
+    final_configs = []
+    untested_configs = []
+    
     for conf in unique_configs:
         protocol, name, ip, port = parse_config_info(conf)
         ping_status = tcp_ping(ip, port)
         
-        if "متصل" in ping_status:
-            valid_configs.append({
-                "conf": conf,
-                "protocol": protocol,
-                "name": name,
-                "ip": ip, # ذخیره آی‌پی برای پیدا کردن لوکیشن دقیق
-                "ping": ping_status
-            })
+        item = {
+            "conf": conf,
+            "protocol": protocol,
+            "name": name,
+            "ip": ip,
+            "ping": ping_status
+        }
         
-        if len(valid_configs) >= 3:
+        if "متصل" in ping_status:
+            final_configs.append(item)
+        else:
+            untested_configs.append(item)
+            
+        if len(final_configs) >= 3:
             break
+
+    # ترفند طلایی: اگر کمتر از 3 کانفیگ متصل پیدا کردیم، بقیه رو از همون لیست تایم‌اوت شده‌ها برمیداریم
+    if len(final_configs) < 3:
+        needed = 3 - len(final_configs)
+        final_configs.extend(untested_configs[:needed])
+
+    if not final_configs:
+        print("هیچ کانفیگی برای ارسال پیدا نشد.")
+        sys.exit(1)
+
+    api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    iran_time_str = get_iran_time()
+    
+    for item in final_configs:
+        real_location = get_real_location(item['ip'], item['name'])
+        
+        message = f"""
+🚀 <b>کانفیگ جدید و پرسرعت</b>
+
+📍 <b>لوکیشن:</b> {real_location}
+⚙️ <b>پروتکل:</b> {item['protocol']}
+📡 <b>وضعیت سرور:</b> {item['ping']} (تست از {tester_loc})
+⏰ <b>زمان استخراج:</b> {iran_time_str}
+
+👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
+
+<code>{item['conf']}</code>
+
+🆔 {CHANNEL_ID}
+"""
+        payload = {
+            "chat_id": CHANNEL_ID,
+            "text": message.strip(),
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True
+        }
+        
+        requests.post(api_url, json=payload)
+        time.sleep(3)
+        
+    print("✅ ارسال موفقیت‌آمیز بود!")
+
+if __name__ == "__main__":
+    main()
