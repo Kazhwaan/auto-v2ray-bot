@@ -19,29 +19,22 @@ SOURCES = [
 ]
 
 def get_tester_location():
-    """پیدا کردن کشوری که سرور گیت‌هاب الان توشه"""
     try:
         res = requests.get("https://ipinfo.io/json", timeout=5).json()
         country_code = res.get("country", "US")
-        # ترجمه کدهای معروف به فارسی
         country_map = {
-            "US": "آمریکا 🇺🇸", 
-            "NL": "هلند 🇳🇱", 
-            "DE": "آلمان 🇩🇪", 
-            "GB": "انگلیس 🇬🇧",
-            "FR": "فرانسه 🇫🇷"
+            "US": "آمریکا 🇺🇸", "NL": "هلند 🇳🇱", "DE": "آلمان 🇩🇪", 
+            "GB": "انگلیس 🇬🇧", "FR": "فرانسه 🇫🇷", "FI": "فنلاند 🇫🇮"
         }
         return country_map.get(country_code, f"سرور خارجی ({country_code})")
     except:
         return "سرور گیت‌هاب"
 
 def get_iran_time():
-    """محاسبه دقیق ساعت و تاریخ ایران"""
     iran_tz = timezone(timedelta(hours=3, minutes=30))
     return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S") + " (به وقت ایران)"
 
 def tcp_ping(ip, port):
-    """تست زنده بودن سرور و گرفتن پینگ واقعی"""
     if not ip or not port:
         return "🟡 نامشخص"
     try:
@@ -55,6 +48,34 @@ def tcp_ping(ip, port):
         return f"🟢 متصل ({ping_ms}ms)"
     except:
         return "🔴 تایم‌اوت"
+
+def get_real_location(ip, original_name):
+    """رادار آی‌پی: پیدا کردن کشور واقعی و پرچم دقیق آن"""
+    # پاک کردن ایموجی‌های عجیب و غریب از اسم اصلی
+    clean_name = re.sub(r'[^\w\s\-\.]', '', original_name).strip()
+    if not clean_name:
+        clean_name = "سرور ناشناس"
+
+    if not ip:
+        return f"{clean_name} 🌍"
+
+    try:
+        # جستجوی آی‌پی در دیتابیس جهانی
+        res = requests.get(f"https://ipinfo.io/{ip}/json", timeout=4).json()
+        if "country" in res:
+            cc = res["country"] # کد دو حرفی کشور مثل US
+            # تبدیل هوشمند کد کشور به پرچم ایموجی
+            flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
+            city = res.get("city", "")
+            
+            if city:
+                return f"{city}, {cc} {flag}"
+            else:
+                return f"{cc} {flag}"
+    except:
+        pass
+        
+    return f"{clean_name} 🌍"
 
 def decode_base64(text):
     text = text.strip()
@@ -110,7 +131,6 @@ def main():
         print("ارور: توکن یا آیدی کانال خالی است!")
         sys.exit(1)
 
-    # گرفتن لوکیشن تستر در همون ابتدای کار
     tester_loc = get_tester_location()
 
     all_configs = []
@@ -143,42 +163,9 @@ def main():
                 "conf": conf,
                 "protocol": protocol,
                 "name": name,
+                "ip": ip, # ذخیره آی‌پی برای پیدا کردن لوکیشن دقیق
                 "ping": ping_status
             })
         
         if len(valid_configs) >= 3:
             break
-
-    if not valid_configs:
-        sys.exit(0)
-
-    api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    iran_time_str = get_iran_time()
-    
-    for item in valid_configs:
-        message = f"""
-🚀 <b>کانفیگ جدید و پرسرعت</b>
-
-📍 <b>لوکیشن:</b> {item['name']}
-⚙️ <b>پروتکل:</b> {item['protocol']}
-📡 <b>وضعیت سرور:</b> {item['ping']} (تست از {tester_loc})
-⏰ <b>زمان استخراج:</b> {iran_time_str}
-
-👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
-
-<code>{item['conf']}</code>
-
-🆔 {CHANNEL_ID}
-"""
-        payload = {
-            "chat_id": CHANNEL_ID,
-            "text": message.strip(),
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True
-        }
-        
-        requests.post(api_url, json=payload)
-        time.sleep(3)
-
-if __name__ == "__main__":
-    main()
