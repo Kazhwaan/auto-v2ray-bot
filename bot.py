@@ -36,21 +36,6 @@ def get_iran_time():
     iran_tz = timezone(timedelta(hours=3, minutes=30))
     return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S")
 
-def get_real_location(ip):
-    if not ip: return "مخفی (پشت CDN) ☁️"
-    try:
-        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
-            ip = socket.gethostbyname(ip)
-        res = requests.get(f"https://ipinfo.io/{ip}/json", timeout=3).json()
-        if "country" in res:
-            cc = res["country"]
-            flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
-            city = res.get("city", "")
-            return f"{city}, {cc} {flag}" if city else f"{cc} {flag}"
-    except:
-        pass
-    return "نامشخص 🌍"
-
 def tcp_ping(ip, port):
     if not ip or not port: return "🟡 وضعیت: مخفی"
     try:
@@ -63,7 +48,7 @@ def tcp_ping(ip, port):
         s.close()
         return f"🟢 متصل ({int((end - start) * 1000)}ms)"
     except:
-        return "🔵 فیلترشده (نیازمند فرگمنت)"
+        return "🔵 فیلترشده (نیازمند فرگمنت یا آی‌پی تمیز)"
 
 def parse_config_info(config_str):
     protocol, name, ip, port = "نامشخص", "مخفی 🌍", "", ""
@@ -89,11 +74,9 @@ def safe_base64_decode(text):
 
 def run_bot():
     SOURCES = [
-        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/reality",
-        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/vless",
         "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
-        "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
-        "https://raw.githubusercontent.com/w177140/v2rayN-configs/main/vless.txt"
+        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/vless",
+        "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt"
     ]
     
     all_configs = []
@@ -101,42 +84,48 @@ def run_bot():
         try:
             res = requests.get(url, timeout=10)
             if res.status_code == 200:
-                all_configs.extend(re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+)', res.text))
+                all_configs.extend(re.findall(r'(vless://[^\s<>]+)', res.text))
                 decoded = safe_base64_decode(res.text)
-                if decoded: all_configs.extend(re.findall(r'(vless://[^\s<>]+|trojan://[^\s<>]+)', decoded))
+                if decoded: all_configs.extend(re.findall(r'(vless://[^\s<>]+)', decoded))
         except: continue
 
     if not all_configs: return send_msg("⚠️ <b>ربات:</b> تمام منابع مسدود هستند.")
 
     unique = list(dict.fromkeys(reversed(all_configs)))
     
+    # تغییر استراتژی: اولویت دادن به کانفیگ‌های Cloudflare (ws)
     def get_score(conf):
         c = conf.lower()
-        return (20 if "reality" in c else 0) + (15 if any(x in c for x in ["mci","mtn","irancell","mahsa"]) else 0) + (10 if "vless" in c else 0)
+        score = 0
+        if "type=ws" in c: score += 50  # این دقیقا همون تکنولوژی هیدیفایه (کلاودفلر)
+        if "worker" in c or "pages" in c: score += 30
+        if "reality" in c: score -= 10  # ریالیتی‌های پابلیک تو ایران زود می‌میرن، پس امتیازشون رو کم می‌کنیم
+        return score
 
     unique.sort(key=get_score, reverse=True)
     
     final_configs = []
-    for conf in unique[:40]:
+    for conf in unique[:50]:
         protocol, name, ip, port = parse_config_info(conf)
+        # فقط اونایی که پینگ میدن و WS هستن رو برمیداره
         ping = tcp_ping(ip, port)
-        if "متصل" in ping: final_configs.append({"conf": conf, "protocol": protocol, "ip": ip, "name": name, "ping": ping})
-        if len(final_configs) >= 5: break # ارسال ۵ کانفیگ برای افزایش شانس
+        if "متصل" in ping: 
+            final_configs.append({"conf": conf, "protocol": protocol, "ip": ip, "name": name, "ping": ping})
+        if len(final_configs) >= 5: break
 
     iran_time = get_iran_time()
 
     for item in final_configs:
-        loc = html.escape(get_real_location(item['ip']))
         conf_safe = html.escape(item['conf'])
         
         msg = f"""
-🚀 <b>کانفیگ جدید و ضد فیلتر</b>
+☁️ <b>کانفیگ جدید VLESS (نسخه Cloudflare/WS)</b>
 
-📍 <b>لوکیشن:</b> {loc}
-⚙️ <b>پروتکل:</b> {item['protocol']}
+📍 <b>پروتکل:</b> {item['protocol']}
+⚙️ <b>نوع شبکه:</b> WebSocket (مقاوم در برابر فیلترینگ)
 ⏰ <b>آپدیت:</b> {iran_time}
 
-💡 <i>در صورت عدم اتصال، حتماً گزینه <b>Fragment (فرگمنت)</b> را در برنامه خود روشن کنید تا فیلترینگ دور زده شود.</i>
+💡 <i>این کانفیگ‌ها از نوع WS هستند. برای عملکرد بهتر در هیدیفای، از بخش تنظیمات پیشرفته، <b>«آی‌پی تمیز کلاودفلر (Clean IP)»</b> را روی آن‌ها اعمال کنید.</i>
 
 👇 <b>برای اتصال ضربه بزنید:</b>
 
