@@ -2,29 +2,33 @@ import requests
 import os
 import base64
 import sys
+import re
+import traceback
 
-# دریافت اطلاعات مخفی
-raw_token = os.environ.get("BOT_TOKEN", "")
-raw_channel = os.environ.get("CHANNEL_ID", "")
-
-# 🧹 فیلتر جادویی: حذف تمام کاراکترهای نامرئی و غیرانگلیسی که موقع کپی کردن اضافه میشن
-BOT_TOKEN = "".join(c for c in raw_token if c.isascii()).strip()
-CHANNEL_ID = "".join(c for c in raw_channel if c.isascii()).strip()
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
+CHANNEL_ID = os.environ.get("CHANNEL_ID", "").strip()
 
 SOURCE_URL = "https://raw.githubusercontent.com/mahdibland/ShadowsocksAggregator/master/sub/sub_merge.txt"
 
 def main():
     if not BOT_TOKEN or not CHANNEL_ID:
-        print("ارور سیستم: توکن یا آیدی کانال خالی است!")
+        print("ارور: توکن یا آیدی کانال خالی است!")
         sys.exit(1)
 
     try:
         response = requests.get(SOURCE_URL, timeout=15)
         if response.status_code != 200:
-            print(f"ارور در دانلود کانفیگ‌ها. کد: {response.status_code}")
+            print("ارور در دریافت کانفیگ‌ها از منبع.")
             sys.exit(1)
             
-        decoded_data = base64.b64decode(response.text).decode('utf-8')
+        # 🧹 صافی جادویی: حذف تمام کاراکترهای مزاحم و غیرمجاز از فایلی که دانلود کردیم
+        raw_text = response.text
+        clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', raw_text)
+        
+        # حالا با خیال راحت رمزگشایی می‌کنیم
+        decoded_bytes = base64.b64decode(clean_b64)
+        decoded_data = decoded_bytes.decode('utf-8', errors='ignore')
+        
         configs = [line for line in decoded_data.splitlines() if line.strip()]
         
         if len(configs) == 0:
@@ -48,13 +52,14 @@ def main():
         tg_res = requests.post(url, json=payload)
         
         if tg_res.status_code != 200:
-            print(f"تلگرام پیام را رد کرد! دلیل ارور:\n{tg_res.text}")
+            print(f"تلگرام پیام را رد کرد! دلیل:\n{tg_res.text}")
             sys.exit(1)
             
         print("✅ پیام با موفقیت در کانال ارسال شد!")
 
     except Exception as e:
-        print(f"ارور ناشناخته: {e}")
+        print(f"ارور ناشناخته:\n")
+        traceback.print_exc() # این خط دقیقا میگه کدوم خط از کد ارور داده
         sys.exit(1)
 
 if __name__ == "__main__":
