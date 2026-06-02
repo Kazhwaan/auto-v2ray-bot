@@ -46,7 +46,7 @@ def get_tester_location():
         cc = res.get("country", "US")
         flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
         return f"{cc} {flag}"
-    except:
+    except Exception:
         return "US 🇺🇸"
 
 def tcp_ping(ip, port):
@@ -63,11 +63,12 @@ def tcp_ping(ip, port):
         s.close()
         ping_ms = int((end - start) * 1000)
         return f"🟢 متصل ({ping_ms}ms)"
-    except:
+    except Exception:
         return "🔴 تایم‌اوت"
 
 def get_real_location(ip):
-    if not ip: return "مخفی (پشت CDN) ☁️"
+    if not ip: 
+        return "مخفی (پشت CDN) ☁️"
     try:
         if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
             ip = socket.gethostbyname(ip)
@@ -76,3 +77,166 @@ def get_real_location(ip):
             cc = res["country"]
             flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
             city = res.get("city", "")
+            if city:
+                return f"{city}, {cc} {flag}"
+            else:
+                return f"{cc} {flag}"
+    except Exception:
+        pass
+    return "نامشخص 🌍"
+
+def decode_base64(text):
+    text = text.strip()
+    missing_padding = len(text) % 4
+    if missing_padding != 0:
+        text += '=' * (4 - missing_padding)
+    try:
+        return base64.b64decode(text).decode('utf-8', errors='ignore')
+    except Exception:
+        return ""
+
+def parse_config_info(config_str):
+    protocol = "نامشخص"
+    name = "مخفی 🌍"
+    ip = ""
+    port = ""
+    try:
+        if config_str.startswith("vless://"):
+            protocol = "VLESS 🛡️"
+        elif config_str.startswith("trojan://"):
+            protocol = "Trojan 🐎"
+        elif config_str.startswith("vmess://"):
+            protocol = "VMess 🪪"
+            
+        if "#" in config_str:
+            name = urllib.parse.unquote(config_str.split("#")[1])
+            
+        if not config_str.startswith("vmess://"):
+            match = re.search(r'://[^@]+@([^:]+):(\d+)', config_str)
+            if match:
+                ip, port = match.groups()
+        else:
+            b64_str = config_str[8:]
+            missing_padding = len(b64_str) % 4
+            if missing_padding != 0:
+                b64_str += '=' * (4 - missing_padding)
+            json_str = base64.b64decode(b64_str).decode('utf-8')
+            data = json.loads(json_str)
+            ip = data.get("add", "")
+            port = data.get("port", "")
+    except Exception:
+        pass
+    return protocol, name, ip, port
+
+def run_bot():
+    SOURCES = [
+        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
+        "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Splitted-By-Protocol/vless.txt",
+        "https://raw.githubusercontent.com/mehdirzfx/v2ray-sub/main/vless.txt",
+        "https://raw.githubusercontent.com/yebekhe/TelegramV2rayCollector/main/sub/normal/mix"
+    ]
+    
+    all_configs = []
+    for url in SOURCES:
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                text = response.text
+                if "vmess://" in text or "vless://" in text or "trojan://" in text:
+                    decoded = text
+                else:
+                    decoded = decode_base64(text)
+                
+                configs = re.findall(r'(vless://\S+|trojan://\S+|vmess://\S+)', decoded)
+                all_configs.extend(configs)
+        except Exception:
+            continue
+
+    if not all_configs:
+        send_msg("⚠️ <b>ربات:</b> هیچ کانفیگی در منابع یافت نشد یا سرورها مسدود هستند.")
+        return
+
+    seen = set()
+    unique = []
+    for c in reversed(all_configs):
+        if c not in seen:
+            unique.append(c)
+            seen.add(c)
+            
+    def get_score(conf):
+        conf_lower = conf.lower()
+        score = 0
+        if "reality" in conf_lower: score += 10
+        if "vless://" in conf_lower: score += 5
+        if "trojan://" in conf_lower: score += 2
+        return score
+
+    unique.sort(key=get_score, reverse=True)
+
+    final_configs = []
+    for conf in unique[:25]:
+        protocol, name, ip, port = parse_config_info(conf)
+        ping_status = tcp_ping(ip, port)
+        
+        item = {
+            "conf": conf,
+            "protocol": protocol,
+            "ip": ip,
+            "ping": ping_status
+        }
+        
+        if "متصل" in ping_status:
+            final_configs.append(item)
+            
+        if len(final_configs) >= 3:
+            break
+
+    if len(final_configs) < 3:
+        needed = 3 - len(final_configs)
+        untested = [c for c in unique if c not in [f['conf'] for f in final_configs]]
+        for conf in untested[:needed]:
+            protocol, name, ip, port = parse_config_info(conf)
+            final_configs.append({
+                "conf": conf,
+                "protocol": protocol,
+                "ip": ip,
+                "ping": "🔴 بررسی نشده (فایروال روشن)"
+            })
+
+    iran_time_str = get_iran_time()
+    tester_loc = get_tester_location()
+
+    for item in final_configs:
+        real_location = get_real_location(item['ip'])
+        
+        safe_conf = html.escape(item['conf'])
+        safe_loc = html.escape(real_location)
+        
+        message = f"""
+🚀 <b>کانفیگ جدید و ضد فیلتر</b>
+
+📍 <b>لوکیشن:</b> {safe_loc}
+⚙️ <b>پروتکل:</b> {item['protocol']}
+📡 <b>وضعیت سرور:</b> {item['ping']} (تست از {tester_loc})
+⏰ <b>زمان استخراج:</b> {iran_time_str}
+
+👇 <b>برای اتصال روی کادر زیر ضربه بزنید تا کپی شود:</b>
+
+<code>{safe_conf}</code>
+
+🆔 {CHANNEL_ID}
+"""
+        res = send_msg(message.strip())
+        
+        if res.status_code != 200:
+            err = f"❌ <b>تلگرام اجازه ارسال یک کانفیگ را نداد! دلیل ارور:</b>\n\n<pre>{html.escape(res.text)}</pre>"
+            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
+                "chat_id": CHANNEL_ID,
+                "text": err,
+                "parse_mode": "HTML"
+            })
+            
+        time.sleep(3)
+
+if __name__ == "__main__":
+    main()
