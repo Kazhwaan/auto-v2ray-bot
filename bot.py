@@ -36,6 +36,21 @@ def get_iran_time():
     iran_tz = timezone(timedelta(hours=3, minutes=30))
     return datetime.now(iran_tz).strftime("%Y/%m/%d - %H:%M:%S")
 
+def get_real_location(ip):
+    if not ip: return "مخفی (پشت CDN) ☁️"
+    try:
+        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', ip):
+            ip = socket.gethostbyname(ip)
+        res = requests.get(f"https://ipinfo.io/{ip}/json", timeout=3).json()
+        if "country" in res:
+            cc = res["country"]
+            flag = chr(ord(cc[0]) + 127397) + chr(ord(cc[1]) + 127397)
+            city = res.get("city", "")
+            return f"{city}, {cc} {flag}" if city else f"{cc} {flag}"
+    except:
+        pass
+    return "نامشخص 🌍"
+
 def tcp_ping(ip, port):
     if not ip or not port: return "🟡 وضعیت: مخفی"
     try:
@@ -93,13 +108,13 @@ def run_bot():
 
     unique = list(dict.fromkeys(reversed(all_configs)))
     
-    # تغییر استراتژی: اولویت دادن به کانفیگ‌های Cloudflare (ws)
+    # اولویت دادن به کانفیگ‌های کلاودفلر (WS) برای عملکرد شبیه به هیدیفای
     def get_score(conf):
         c = conf.lower()
         score = 0
-        if "type=ws" in c: score += 50  # این دقیقا همون تکنولوژی هیدیفایه (کلاودفلر)
+        if "type=ws" in c: score += 50
         if "worker" in c or "pages" in c: score += 30
-        if "reality" in c: score -= 10  # ریالیتی‌های پابلیک تو ایران زود می‌میرن، پس امتیازشون رو کم می‌کنیم
+        if "reality" in c: score -= 10 
         return score
 
     unique.sort(key=get_score, reverse=True)
@@ -107,8 +122,8 @@ def run_bot():
     final_configs = []
     for conf in unique[:50]:
         protocol, name, ip, port = parse_config_info(conf)
-        # فقط اونایی که پینگ میدن و WS هستن رو برمیداره
         ping = tcp_ping(ip, port)
+        # فقط اونایی که پینگ میدن رو جدا می‌کنه
         if "متصل" in ping: 
             final_configs.append({"conf": conf, "protocol": protocol, "ip": ip, "name": name, "ping": ping})
         if len(final_configs) >= 5: break
@@ -116,13 +131,14 @@ def run_bot():
     iran_time = get_iran_time()
 
     for item in final_configs:
+        loc = html.escape(get_real_location(item['ip']))
         conf_safe = html.escape(item['conf'])
         
         msg = f"""
 ☁️ <b>کانفیگ جدید VLESS (نسخه Cloudflare/WS)</b>
 
-📍 <b>پروتکل:</b> {item['protocol']}
-⚙️ <b>نوع شبکه:</b> WebSocket (مقاوم در برابر فیلترینگ)
+📍 <b>لوکیشن:</b> {loc}
+⚙️ <b>پروتکل:</b> {item['protocol']}
 ⏰ <b>آپدیت:</b> {iran_time}
 
 💡 <i>این کانفیگ‌ها از نوع WS هستند. برای عملکرد بهتر در هیدیفای، از بخش تنظیمات پیشرفته، <b>«آی‌پی تمیز کلاودفلر (Clean IP)»</b> را روی آن‌ها اعمال کنید.</i>
